@@ -3,13 +3,13 @@
  * Post-build: keep every legacy URL working on the static export.
  *
  * 1. Writes a tiny redirect page (meta refresh + canonical + JS) at each old
- *    path inside out/. Paths like /business/default.aspx are written as
- *    out/business/default.aspx/index.html — static hosts serve that for the
+ *    path inside dist/. Paths like /business/default.aspx are written as
+ *    dist/business/default.aspx/index.html — static hosts serve that for the
  *    bare URL (or after a trailing-slash hop), and it avoids hosts serving a
  *    ".aspx" file with the wrong MIME type.
  * 2. Writes real 301 rules for the hosting provider:
- *      out/_redirects  (Netlify / Cloudflare Pages)
- *      out/.htaccess   (Apache / most cPanel hosts)
+ *      dist/_redirects  (Netlify / Cloudflare Pages)
+ *      dist/.htaccess   (Apache / most cPanel hosts)
  *    and REDIRECTS.md (human-readable list + Vercel/nginx snippets).
  *
  * Runs automatically via the "postbuild" npm script.
@@ -20,7 +20,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const OUT = path.join(ROOT, "out");
+const OUT = path.join(ROOT, "dist");
 const SITE = "https://www.businessinsurancewashingtondc.com";
 
 /** Legacy coverage URLs → slugs. Kept in sync with content.ts (legacyPaths). */
@@ -74,13 +74,13 @@ function stub(to, js = "") {
 `;
 }
 
-/** Where a legacy URL's stub lives inside out/. */
+/** Where a legacy URL's stub lives inside dist/. */
 function stubFile(from) {
   return path.join(OUT, from.split("?")[0], "index.html");
 }
 
 async function main() {
-  if (!existsSync(OUT)) throw new Error("out/ not found — run `next build` first");
+  if (!existsSync(OUT)) throw new Error("dist/ not found — run `next build` first");
   const coverage = await coverageMap();
   const all = [...STATIC, ...coverage];
   const plain = all.filter(([from]) => !from.includes("?"));
@@ -129,7 +129,7 @@ async function main() {
   ].join("\n");
   await writeFile(path.join(OUT, ".htaccess"), htaccess + "\n");
 
-  // `serve` (npm run serve) reads out/serve.json — mirror the 301s so local testing matches production.
+  // `serve` (npm run serve) reads dist/serve.json — mirror the 301s so local testing matches production.
   const serveJson = {
     directoryListing: false,
     trailingSlash: true,
@@ -148,8 +148,9 @@ async function main() {
     "The static export already contains a redirect page at every old path (meta refresh + canonical),",
     "so old links work on any host. For SEO, also configure real **301** redirects at the host:",
     "",
-    "- **Netlify / Cloudflare Pages:** `out/_redirects` is picked up automatically (Cloudflare ignores the query-string rules; the `/category.aspx` stub handles those).",
-    "- **Apache / cPanel:** `out/.htaccess` is included.",
+    "- **Netlify / Cloudflare Pages:** `dist/_redirects` is picked up automatically (Cloudflare ignores the query-string rules; the `/category.aspx` stub handles those).",
+    "- **Apache / cPanel:** `dist/.htaccess` is included.",
+    "- **Nginx on Lightsail (`cpanel sites new`):** run `sudo bash deploy/fix-nginx.sh <domain>` once. It makes the old `.aspx` addresses open the redirect pages in `dist/`.",
     "- **Vercel / nginx:** copy the table below into `vercel.json` `redirects` or `location` blocks.",
     "",
     "| Old URL | New URL |",
